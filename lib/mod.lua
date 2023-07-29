@@ -1,7 +1,32 @@
+local music = require("musicutil")
 local mod = require 'core/mods'
 local voice = require 'lib/voice'
 
 local JF_I2C_FREQ = 0.02
+
+local function _justint(fn, f, off)
+    off = off and fn(off) or 0 -- optional offset is a just ratio
+    if type(f) == 'table' then
+        local t = {}
+        for k,v in ipairs(f) do
+            t[k] = fn(v) + off
+        end
+        return t
+    else -- assume number
+        return fn(f) + off
+    end
+end
+local JIVOLT = 1 / math.log(2)
+local JI12TET = 12 * JIVOLT
+local function _jiv(f) return math.log(f) * JIVOLT end
+local function _ji12(f) return math.log(f) * JI12TET end
+-- public functions
+local function justvolts(f, off) return _justint(_jiv, f, off) end
+local function just12(f, off) return _justint(_ji12, f, off) end
+local function hztovolts(hz, ref)
+    ref = ref or 261.63 -- optional. defaults to middle-C
+    return justvolts(hz/ref)
+end
 
 if note_players == nil then
     note_players = {}
@@ -70,7 +95,9 @@ local function add_mono_player(idx)
         self.note = note
         self.count = self.count + 1
         self.old_v8 = player.cur_v8
-        self.v8 = (note - 60) / 12
+        --self.v8 = (note - 60) / 12
+        self.v8 = hhztovolts(freq)
+        local freq = music.note_num_to_freq((note - 60) % 128)
         local v_vel = vel * 5
         local slew = params:get("nb_jf_slew_"..idx)
         if slew == 0 or self.old_v8 == nil or self.old_v8 == self.v8 then
@@ -158,7 +185,9 @@ local function add_unison_player()
 
     function player:note_on(note, vel)
         self.count = self.count + 1        
-        self.v8 = (note - 60) / 12
+        --self.v8 = (note - 60) / 12
+        self.v8 = hhztovolts(freq)
+        local freq = music.note_num_to_freq((note - 60) % 128)
         local v_vel = vel * 5
         local detune = params:get("nb_jf_unison_detune")
         for i=1,6 do
@@ -210,13 +239,17 @@ local function add_poly_player()
     }
 
     function player:note_on(note, vel)
-        local v8 = (note - 60)/12
+        --local v8 = (note - 60)/12
+        local v8 = hhztovolts(freq)
+        local freq = music.note_num_to_freq((note - 60) % 128)
         local v_vel =  vel^(3/2) * 5
         crow.ii.jf.play_note(v8, v_vel)
     end
 
     function player:note_off(note)
-        local v8 = (note - 60)/12
+        --local v8 = (note - 60)/12
+        local v8 = hhztovolts(freq)
+        local freq = music.note_num_to_freq((note - 60) % 128)
         local v_vel = 0
         crow.ii.jf.play_note(v8, v_vel)
     end
@@ -257,14 +290,18 @@ local function add_mpe_player()
             crow.ii.jf.trigger(slot.id, 0)
         end
         self.notes[note] = slot
-        local v8 = (note - 60)/12
+        --local v8 = (note - 60)/12
+        local v8 = hhztovolts(freq)
+        local freq = music.note_num_to_freq((note - 60) % 128)
         local v_vel = vel^(3/2) * 5
         crow.ii.jf.pitch(slot.id, v8)
         crow.ii.jf.vtrigger(slot.id, v_vel)
     end
 
     function player:pitch_bend(note, val)
-        local v8 = (note - 60 + val)/12
+        --local v8 = (note - 60 + val)/12
+        local v8 = hhztovolts(freq)
+        local freq = music.note_num_to_freq((note - 60 + val) % 128)
         local slot = self.notes[note]
         if slot ~= nil then
             crow.ii.jf.pitch(slot.id, v8)
